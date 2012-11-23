@@ -9,14 +9,13 @@ logan.runner
 from __future__ import absolute_import
 
 from django.core import management
-from django.utils.importlib import import_module
 from optparse import OptionParser
 import os
 import re
 import sys
 
-from logan.settings import create_default_settings, load_settings, \
-  add_settings
+from logan import importer
+from logan.settings import create_default_settings
 
 
 def sanitize_name(project):
@@ -47,9 +46,9 @@ def parse_args(args):
     return (args[:index], args[index], args[(index + 1):])
 
 
-def run_app(project=None, default_config_path=None, default_settings=None,
+def configure_app(config_path=None, project=None, default_config_path=None, default_settings=None,
             settings_initializer=None, settings_envvar=None, initializer=None,
-            allow_extras=True):
+            allow_extras=True, config_module_name=None, runner_name=None):
     """
     :param project: should represent the canonical name for the project, generally
         the same name it assigned in distutils.
@@ -61,6 +60,50 @@ def run_app(project=None, default_config_path=None, default_settings=None,
         is executed. It is passed a dictionary of various configuration attributes.
     """
 
+    project_filename = sanitize_name(project)
+
+    if default_config_path is None:
+        default_config_path = '~/%s/%s.conf.py' % (project_filename, project_filename)
+
+    if settings_envvar is None:
+        settings_envvar = project_filename.upper() + '_CONF'
+
+    if config_module_name is None:
+        config_module_name = project_filename + '_config'
+
+    # normalize path
+    if settings_envvar in os.environ:
+        default_config_path = os.environ.get(settings_envvar)
+    else:
+        default_config_path = os.path.normpath(os.path.abspath(os.path.expanduser(default_config_path)))
+
+    if not config_path:
+        config_path = default_config_path
+
+    config_path = os.path.expanduser(config_path)
+
+    if not os.path.exists(config_path):
+        if runner_name:
+            raise ValueError("Configuration file does not exist. Use '%s init' to initialize the file." % (runner_name,))
+        raise ValueError("Configuration file does not exist at %r" % (config_path,))
+
+    os.environ['DJANGO_SETTINGS_MODULE'] = config_module_name
+
+    def settings_callback(settings):
+        if initializer is None:
+            return
+
+        initializer({
+            'project': project,
+            'config_path': config_path,
+            'settings': settings,
+        })
+
+    importer.install(config_module_name, config_path, default_settings,
+        allow_extras=allow_extras, callback=settings_callback)
+
+
+def run_app(**kwargs):
     sys_args = sys.argv
 
     # The established command for running this program
@@ -72,25 +115,15 @@ def run_app(project=None, default_config_path=None, default_settings=None,
         print "usage: %s [--config=/path/to/settings.py] [command] [options]" % runner_name
         sys.exit(1)
 
+    default_config_path = kwargs.get('default_config_path')
+
     parser = OptionParser()
-
-    project_filename = sanitize_name(project)
-
-    if default_config_path is None:
-        default_config_path = '~/%s/%s.conf.py' % (project_filename, project_filename)
-
-    if settings_envvar is None:
-        settings_envvar = project_filename.upper() + '_CONF'
-
-    # normalize path
-    if settings_envvar in os.environ:
-        default_config_path = os.environ.get(settings_envvar)
-    else:
-        default_config_path = os.path.normpath(os.path.abspath(os.path.expanduser(default_config_path)))
 
     # The ``init`` command is reserved for initializing configuration
     if command == 'init':
         (options, opt_args) = parser.parse_args()
+
+        settings_initializer = kwargs.get('settings_initializer')
 
         config_path = ' '.join(opt_args[1:]) or default_config_path
 
@@ -117,22 +150,7 @@ def run_app(project=None, default_config_path=None, default_settings=None,
 
     config_path = options.config
 
-    if not os.path.exists(config_path):
-        raise ValueError("Configuration file does not exist. Use '%s init' to initialize the file." % runner_name)
-
-    if default_settings:
-        settings_mod = import_module(default_settings)
-        # TODO: logan should create a proxy module for its settings
-        management.setup_environ(settings_mod, default_settings)
-        add_settings(settings_mod, allow_extras=allow_extras)
-
-    load_settings(config_path, allow_extras=allow_extras)
-
-    if initializer is not None:
-        initializer({
-            'project': project,
-            'config_path': config_path,
-        })
+    configure_app(config_path=config_path, **kwargs)
 
     management.execute_from_command_line([runner_name, command] + command_args)
 
