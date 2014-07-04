@@ -6,8 +6,9 @@ logan.importer
 :license: Apache License 2.0, see LICENSE for more details.
 """
 
+from __future__ import absolute_import
+
 import sys
-from django.core.exceptions import ImproperlyConfigured
 from django.utils.importlib import import_module
 from logan.settings import load_settings, create_module
 
@@ -25,6 +26,10 @@ def install(name, config_path, default_settings, **kwargs):
     installed = True
 
 
+class ConfigurationError(Exception):
+    pass
+
+
 class LoganImporter(object):
     def __init__(self, name, config_path, default_settings=None, allow_extras=True, callback=None):
         self.name = name
@@ -38,9 +43,15 @@ class LoganImporter(object):
         return "<%s for '%s' (%s)>" % (type(self), self.name, self.config_path)
 
     def validate(self):
-        # if self.name is None:
-        #     raise ImproperlyConfigured(self.error_msg % self.class_varname)
-        pass
+        # TODO(dcramer): is there a better way to handle validation so it
+        # is lazy and actually happens in LoganLoader?
+        try:
+            execfile(self.config_path, {
+                '__file__': self.config_path
+            })
+        except Exception as e:
+            exc_info = sys.exc_info()
+            raise ConfigurationError, unicode(e), exc_info[2]
 
     def find_module(self, fullname, path=None):
         if fullname != self.name:
@@ -68,7 +79,7 @@ class LoganLoader(object):
             return self._load_module(fullname)
         except Exception as e:
             exc_info = sys.exc_info()
-            raise ImproperlyConfigured, repr(e), exc_info[2]
+            raise ConfigurationError, unicode(e), exc_info[2]
 
     def _load_module(self, fullname):
         # TODO: is this needed?

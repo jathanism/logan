@@ -7,13 +7,12 @@ logan.settings
 """
 
 from __future__ import absolute_import
-from __future__ import with_statement
 
 import errno
 import imp
 import os
 import sys
-from django.conf import Settings, global_settings, settings as _settings
+from django.conf import settings as django_settings
 
 __all__ = ('create_default_settings', 'load_settings')
 
@@ -41,13 +40,14 @@ def create_module(name, install=True):
     return mod
 
 
-def load_settings(mod_or_filename, silent=False, allow_extras=True, settings=_settings):
+def load_settings(mod_or_filename, silent=False, allow_extras=True,
+                  settings=django_settings):
     if isinstance(mod_or_filename, basestring):
         conf = create_module('temp_config', install=False)
         conf.__file__ = mod_or_filename
         try:
             execfile(mod_or_filename, conf.__dict__)
-        except IOError, e:
+        except IOError as e:
             if silent and e.errno in (errno.ENOENT, errno.EISDIR):
                 return settings
             e.strerror = 'Unable to load configuration file (%s)' % e.strerror
@@ -58,7 +58,7 @@ def load_settings(mod_or_filename, silent=False, allow_extras=True, settings=_se
     add_settings(conf, allow_extras=allow_extras, settings=settings)
 
 
-def add_settings(mod, allow_extras=True, settings=_settings):
+def add_settings(mod, allow_extras=True, settings=django_settings):
     """
     Adds all settings that are part of ``mod`` to the global settings object.
 

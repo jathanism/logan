@@ -14,7 +14,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='logan',
-    version='0.5.5',
+    version='0.5.10',
     author='David Cramer',
     author_email='dcramer@gmail.com',
     url='http://github.com/dcramer/logan',
@@ -24,7 +24,7 @@ setup(
     zip_safe=False,
     install_requires=[],
     tests_require=[
-        'django>=1.2.5,<1.5',
+        'django>=1',
         'mock>=0.8.0',
         'nose>=1.1.2',
         'unittest2',

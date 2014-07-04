@@ -46,9 +46,10 @@ def parse_args(args):
     return (args[:index], args[index], args[(index + 1):])
 
 
-def configure_app(config_path=None, project=None, default_config_path=None, default_settings=None,
-            settings_initializer=None, settings_envvar=None, initializer=None,
-            allow_extras=True, config_module_name=None, runner_name=None):
+def configure_app(config_path=None, project=None, default_config_path=None,
+                  default_settings=None, settings_initializer=None,
+                  settings_envvar=None, initializer=None, allow_extras=True,
+                  config_module_name=None, runner_name=None):
     """
     :param project: should represent the canonical name for the project, generally
         the same name it assigned in distutils.
@@ -93,14 +94,27 @@ def configure_app(config_path=None, project=None, default_config_path=None, defa
         if initializer is None:
             return
 
-        initializer({
-            'project': project,
-            'config_path': config_path,
-            'settings': settings,
-        })
+        try:
+            initializer({
+                'project': project,
+                'config_path': config_path,
+                'settings': settings,
+            })
+        except Exception:
+            # XXX: Django doesn't like various errors in this path
+            import sys
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
 
-    importer.install(config_module_name, config_path, default_settings,
+    importer.install(
+        config_module_name, config_path, default_settings,
         allow_extras=allow_extras, callback=settings_callback)
+
+    # HACK(dcramer): we need to force access of django.conf.settings to
+    # ensure we don't hit any import-driven recursive behavior
+    from django.conf import settings
+    hasattr(settings, 'INSTALLED_APPS')
 
 
 def run_app(**kwargs):
