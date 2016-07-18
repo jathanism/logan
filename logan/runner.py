@@ -6,7 +6,7 @@ logan.runner
 :license: Apache License 2.0, see LICENSE for more details.
 """
 
-from __future__ import absolute_import
+from __future__ import absolute_import, print_function
 
 from django.core import management
 from optparse import OptionParser
@@ -16,6 +16,15 @@ import sys
 
 from logan import importer
 from logan.settings import create_default_settings
+
+
+try:
+    raw_input
+except NameError:  # PYthon 3
+    raw_input = input
+
+
+__configured = False
 
 
 def sanitize_name(project):
@@ -46,10 +55,15 @@ def parse_args(args):
     return (args[:index], args[index], args[(index + 1):])
 
 
+def is_configured():
+    global __configured
+    return __configured
+
+
 def configure_app(config_path=None, project=None, default_config_path=None,
                   default_settings=None, settings_initializer=None,
                   settings_envvar=None, initializer=None, allow_extras=True,
-                  config_module_name=None, runner_name=None):
+                  config_module_name=None, runner_name=None, on_configure=None):
     """
     :param project: should represent the canonical name for the project, generally
         the same name it assigned in distutils.
@@ -60,6 +74,7 @@ def configure_app(config_path=None, project=None, default_config_path=None,
     :param initializer: a callback function which will be executed before the command
         is executed. It is passed a dictionary of various configuration attributes.
     """
+    global __configured
 
     project_filename = sanitize_name(project)
 
@@ -111,10 +126,19 @@ def configure_app(config_path=None, project=None, default_config_path=None,
         config_module_name, config_path, default_settings,
         allow_extras=allow_extras, callback=settings_callback)
 
+    __configured = True
+
     # HACK(dcramer): we need to force access of django.conf.settings to
     # ensure we don't hit any import-driven recursive behavior
     from django.conf import settings
     hasattr(settings, 'INSTALLED_APPS')
+
+    if on_configure:
+        on_configure({
+            'project': project,
+            'config_path': config_path,
+            'settings': settings,
+        })
 
 
 def run_app(**kwargs):
@@ -126,7 +150,7 @@ def run_app(**kwargs):
     args, command, command_args = parse_args(sys_args[1:])
 
     if not command:
-        print "usage: %s [--config=/path/to/settings.py] [command] [options]" % runner_name
+        print("usage: %s [--config=/path/to/settings.py] [command] [options]" % runner_name)
         sys.exit(1)
 
     default_config_path = kwargs.get('default_config_path')
@@ -146,15 +170,15 @@ def run_app(**kwargs):
             while resp not in ('Y', 'n'):
                 resp = raw_input('File already exists at %r, overwrite? [nY] ' % config_path)
                 if resp == 'n':
-                    print "Aborted!"
+                    print("Aborted!")
                     return
 
         try:
             create_default_settings(config_path, settings_initializer)
-        except OSError, e:
-            raise e.__class__, 'Unable to write default settings file to %r' % config_path
+        except OSError as e:
+            raise e.__class__('Unable to write default settings file to %r' % config_path)
 
-        print "Configuration file created at %r" % config_path
+        print("Configuration file created at %r" % config_path)
 
         return
 
