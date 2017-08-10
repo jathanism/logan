@@ -21,9 +21,9 @@ except NameError:  # Python3
             exec(fh.read(), globalz, localz)
 
 import errno
-import imp
 import os
 import sys
+import types
 from django.conf import settings as django_settings
 
 __all__ = ('create_default_settings', 'load_settings')
@@ -46,7 +46,7 @@ def create_default_settings(filepath, settings_initializer):
 
 
 def create_module(name, install=True):
-    mod = imp.new_module(name)
+    mod = types.ModuleType(name)
     if install:
         sys.modules[name] = mod
     return mod
